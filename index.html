@@ -372,6 +372,8 @@
             const query = e.target.value.toLowerCase().trim();
             if(!query) return;
             if (BANNED_WORDS.some(word => query.includes(word))) {
+                // Clear the box immediately so it doesn't loop
+                e.target.value = ''; 
                 localStorage.setItem('algebra_lock', Date.now() + (5 * 60 * 1000));
                 location.reload(); return;
             }
