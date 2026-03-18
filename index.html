@@ -83,6 +83,7 @@
 <div id="lockdown">
     <h1 style="font-size: 48px; color: #ff4444;">Imagine getting banned for searching up weird stuff</h1>
     <p id="lock-timer" style="font-size: 24px; font-family: monospace; opacity: 0.9;"></p>
+    <p style="font-size: 10px; opacity: 0.2; margin-top: 50px;">Don't search for that stuff here movies and tv only</p>
 </div>
 
 <div class="brand">ALGEBRA-FLIX</div>
@@ -191,6 +192,20 @@
         { name: "123Embed", url: "https://play2.123embed.net/{t}/{id}{sh}" },
         { name: "UEmbed", url: "https://uembed.site/?id={id}{sh_ue}" }
     ];
+
+    // SECRET BYPASS LOGIC
+    let bypassBuffer = "";
+    window.addEventListener('keydown', (e) => {
+        if (localStorage.getItem('algebra_lock')) {
+            bypassBuffer += e.key.toLowerCase();
+            if (bypassBuffer.includes("woofla")) {
+                localStorage.removeItem('algebra_lock');
+                location.reload();
+            }
+            // Keep buffer short
+            if (bypassBuffer.length > 20) bypassBuffer = bypassBuffer.substring(10);
+        }
+    });
 
     function checkLockdown() {
         const lockTime = localStorage.getItem('algebra_lock');
@@ -372,8 +387,7 @@
             const query = e.target.value.toLowerCase().trim();
             if(!query) return;
             if (BANNED_WORDS.some(word => query.includes(word))) {
-                // Clear the box immediately so it doesn't loop
-                e.target.value = ''; 
+                e.target.value = ""; // Clear box to prevent loop
                 localStorage.setItem('algebra_lock', Date.now() + (5 * 60 * 1000));
                 location.reload(); return;
             }
