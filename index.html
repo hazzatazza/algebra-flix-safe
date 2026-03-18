@@ -16,12 +16,7 @@
             font-family: 'Inter', -apple-system, sans-serif;
         }
 
-        body { 
-            margin: 0; 
-            background: var(--bg);
-            color: var(--text-main); 
-            overflow-x: hidden; 
-        }
+        body { margin: 0; background: var(--bg); color: var(--text-main); overflow-x: hidden; }
 
         .brand {
             position: fixed; top: 25px; left: 30px; z-index: 1100;
@@ -42,8 +37,7 @@
         .nav-item.active { opacity: 1; background: rgba(255,255,255,0.1); color: #fff; }
 
         .main-content { padding: 120px 4% 50px; }
-        .section-title { font-size: 24px; font-weight: 800; margin: 30px 0 20px; }
-
+        .section-title { font-size: 24px; font-weight: 800; margin: 30px 0 20px; display: flex; align-items: center; justify-content: space-between; }
         .full-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
         
         .card {
@@ -54,21 +48,13 @@
         .card:hover { transform: scale(1.05); border-color: var(--accent-purple); z-index: 10; }
 
         #details-overlay { position: fixed; inset: 0; z-index: 2000; background: #000; display: none; overflow-y: auto; }
-        .details-backdrop { 
-            position: absolute; top: 0; width: 100%; height: 100vh; 
-            background-size: cover; background-position: top center; opacity: 0.5; 
-            mask-image: linear-gradient(to bottom, black 20%, transparent 90%); 
-        }
+        .details-backdrop { position: absolute; top: 0; width: 100%; height: 100vh; background-size: cover; background-position: top center; opacity: 0.5; mask-image: linear-gradient(to bottom, black 20%, transparent 90%); }
         .details-content { position: relative; z-index: 2100; padding: 100px 5%; max-width: 1400px; margin: 0 auto; }
         
         .meta-tag { background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; }
         .star { color: #ffc107; font-size: 18px; }
 
-        .play-btn { 
-            background: var(--accent-purple); color: white; border: none; 
-            padding: 15px 40px; border-radius: 40px; font-size: 18px; font-weight: 800; 
-            cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.3s;
-        }
+        .play-btn { background: var(--accent-purple); color: white; border: none; padding: 15px 40px; border-radius: 40px; font-size: 18px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
 
         .ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 30px; }
         .ep-card { background: rgba(255,255,255,0.05); border-radius: 15px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: 0.3s; }
@@ -82,10 +68,22 @@
         iframe { width: 100%; height: calc(100% - 80px); border: none; border-radius: 15px; }
 
         .btn-back { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 10px 20px; border-radius: 10px; cursor: pointer; margin-bottom: 20px; }
+        .btn-clear { background: #ff4444; color: white; border: none; padding: 5px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: bold; }
         select { background: #151515; color: white; border: 1px solid var(--border); padding: 10px; border-radius: 10px; }
+
+        #lockdown {
+            position: fixed; inset: 0; background: #000; z-index: 10000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; color: white; padding: 20px;
+        }
     </style>
 </head>
 <body>
+
+<div id="lockdown">
+    <h1 style="font-size: 48px; color: #ff4444;">Imagine getting banned for searching up weird stuff</h1>
+    <p id="lock-timer" style="font-size: 24px; font-family: monospace; opacity: 0.9;"></p>
+</div>
 
 <div class="brand">ALGEBRA-FLIX</div>
 
@@ -103,7 +101,10 @@
 
 <div class="main-content">
     <div id="history-section" style="display:none; margin-bottom:50px;">
-        <h2 class="section-title">Continue Watching</h2>
+        <h2 class="section-title">
+            Continue Watching
+            <button class="btn-clear" onclick="clearHistory()">Clear All</button>
+        </h2>
         <div id="history-grid" class="full-grid"></div>
     </div>
     <h2 class="section-title" id="grid-header">Trending Now</h2>
@@ -150,6 +151,13 @@
     const KEY = "2713804610e1e236b1cf44bfac3a7776";
     let current = null, mode = 'home';
 
+    const BANNED_WORDS = [
+        'porn', 'hentai', 'pornhub', 'overflow', 'tits', 'boobs', 'horny', 'blue movie', 
+        'porno', 'high school on sex', 'sex with love', 'sex dainamaito', 
+        'madonna no shizuku', 'sexual chronicles of a french family', 
+        'adult porn', 'p0rn', 'playboy'
+    ];
+
     const SOURCES = [
         { name: "VidEasy (4K)", url: "https://player.videasy.net/{t}/{id}{sh_ve}?color=8834ec" },
         { name: "VidFast (4K)", url: "https://vidfast.pro/{t}/{id}{sh}" },
@@ -184,7 +192,32 @@
         { name: "UEmbed", url: "https://uembed.site/?id={id}{sh_ue}" }
     ];
 
+    function checkLockdown() {
+        const lockTime = localStorage.getItem('algebra_lock');
+        if (lockTime) {
+            const updateTimer = () => {
+                const remaining = parseInt(lockTime) - Date.now();
+                if (remaining <= 0) {
+                    localStorage.removeItem('algebra_lock');
+                    location.reload();
+                } else {
+                    const mins = Math.floor(remaining / 60000);
+                    const secs = Math.floor((remaining % 60000) / 1000);
+                    document.getElementById('lock-timer').innerText = 
+                        `Back in ${mins}:${secs.toString().padStart(2, '0')} you bum`;
+                }
+            };
+            
+            document.getElementById('lockdown').style.display = 'flex';
+            updateTimer();
+            setInterval(updateTimer, 1000);
+            return true;
+        }
+        return false;
+    }
+
     function init() {
+        if (checkLockdown()) return;
         const sel = document.getElementById('server-select');
         SOURCES.forEach((s, i) => {
             let opt = document.createElement('option');
@@ -196,17 +229,10 @@
     }
 
     async function setMode(m) {
+        if (checkLockdown()) return;
         mode = m;
         document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
         document.getElementById(`nav-${m}`).classList.add('active');
-        
-        const header = document.getElementById('grid-header');
-        if(m === 'home') header.innerText = "Trending Now";
-        if(m === 'movie') header.innerText = "Popular Movies";
-        if(m === 'tv') header.innerText = "Popular TV Shows";
-        if(m === 'anime') header.innerText = "Top Anime";
-        
-        document.getElementById('search-box').value = '';
         loadPage();
     }
 
@@ -214,18 +240,28 @@
         let u = `https://api.themoviedb.org/3/trending/all/week?api_key=${KEY}&include_adult=false`;
         if(mode === 'movie') u = `https://api.themoviedb.org/3/movie/popular?api_key=${KEY}&include_adult=false`;
         if(mode === 'tv') u = `https://api.themoviedb.org/3/tv/popular?api_key=${KEY}&include_adult=false`;
-        if(mode === 'anime') u = `https://api.themoviedb.org/3/discover/tv?api_key=${KEY}&with_genres=16&with_keywords=210024|287501&include_adult=false`;
+        if(mode === 'anime') u = `https://api.themoviedb.org/3/discover/tv?api_key=${KEY}&with_genres=16&include_adult=false`;
         const d = await fetch(u).then(r => r.json());
         renderGrid(d.results, 'main-grid');
     }
 
     function renderGrid(items, targetId) {
         const t = document.getElementById(targetId); t.innerHTML = '';
+        if(!items) return;
         items.forEach(item => {
-            if(!item.poster_path || item.adult === true) return;
+            const title = (item.title || item.name || '').toLowerCase();
+            
+            // Deep Scan Fail-safe
+            if (title.includes('porn')) {
+                localStorage.setItem('algebra_lock', Date.now() + (5 * 60 * 1000));
+                location.reload();
+                return;
+            }
+
+            if(!item.poster_path || item.adult || BANNED_WORDS.some(w => title.includes(w))) return;
+            
             const c = document.createElement('div'); c.className = 'card';
             c.style.backgroundImage = `url(https://image.tmdb.org/t/p/w500${item.poster_path})`;
-            
             const type = item.t || (item.name || item.first_air_date || item.media_type === 'tv' ? 'tv' : 'movie');
             c.onclick = () => openDetails({...item, type});
             t.appendChild(c);
@@ -233,12 +269,10 @@
     }
 
     async function openDetails(item) {
-        const type = item.type || (item.name || item.first_air_date || item.media_type === 'tv' ? 'tv' : 'movie');
+        const type = item.type;
         const data = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${KEY}`).then(r => r.json());
-        
         document.getElementById('details-overlay').style.display = 'block';
         document.body.style.overflow = 'hidden';
-
         document.getElementById('d-backdrop').style.backgroundImage = `url(https://image.tmdb.org/t/p/original${data.backdrop_path})`;
         document.getElementById('d-poster').style.backgroundImage = `url(https://image.tmdb.org/t/p/w500${data.poster_path})`;
         document.getElementById('d-title').innerText = data.title || data.name;
@@ -247,9 +281,7 @@
         document.getElementById('d-year').innerText = (data.release_date || data.first_air_date || '').split('-')[0];
         
         const gDiv = document.getElementById('d-genres'); gDiv.innerHTML = '';
-        data.genres.slice(0,3).forEach(g => {
-            gDiv.innerHTML += `<span class="meta-tag">${g.name}</span>`;
-        });
+        data.genres.slice(0,3).forEach(g => { gDiv.innerHTML += `<span class="meta-tag">${g.name}</span>`; });
 
         const pBtn = document.getElementById('play-main');
         if(type === 'movie') {
@@ -279,12 +311,7 @@
         d.episodes.forEach(e => {
             const thumb = e.still_path ? `https://image.tmdb.org/t/p/w500${e.still_path}` : `https://image.tmdb.org/t/p/w500${poster}`;
             const c = document.createElement('div'); c.className = 'ep-card';
-            c.innerHTML = `
-                <div class="ep-thumb" style="background-image: url(${thumb})"></div>
-                <div class="ep-info">
-                    <div class="ep-title">E${e.episode_number} • ${e.name}</div>
-                    <div class="ep-desc">${e.overview || 'No description available.'}</div>
-                </div>`;
+            c.innerHTML = `<div class="ep-thumb" style="background-image: url(${thumb})"></div><div class="ep-info"><div class="ep-title">E${e.episode_number} • ${e.name}</div><div class="ep-desc">${e.overview || 'N/A'}</div></div>`;
             c.onclick = () => startPlayer('tv', id, s, e.episode_number, title, poster);
             list.appendChild(c);
         });
@@ -302,30 +329,39 @@
 
     function loadPlayer() {
         const srv = SOURCES[document.getElementById('server-select').value];
-        const sh = (current.t === 'tv') ? `/${current.s}/${current.e}` : '';
-        const sh_ve = (current.t === 'tv') ? `/${current.s}/${current.e}` : '';
-        let url = srv.url.replace(/{t}/g, current.t).replace(/{id}/g, current.id)
-            .replace('{sh}', sh).replace('{sh_v}', `${current.s}-${current.e}`)
-            .replace('{sh_ve}', sh_ve)
-            .replace('{sh_me}', `&sea=${current.s}&epi=${current.e}`)
-            .replace('{sh_ma}', (current.t === 'tv' ? `-${current.s}-${current.e}` : ''))
-            .replace('{sh_mu}', `&s=${current.s}&e=${current.e}`)
-            .replace('{sh_rs}', `&season=${current.s}&episode=${current.e}`)
-            .replace('{sh_ue}', `&season=${current.s}&episode=${current.e}`)
-            .replace('{t_2}', (current.t === 'tv' ? 'tv' : '')).replace('{sh_2}', (current.t === 'tv' ? `&s=${current.s}&e=${current.e}` : ''))
-            .replace(/{s}/g, current.s).replace(/{e}/g, current.e);
+        const { t, id, s, e } = current;
+        
+        const sh = (t === 'tv') ? `/${s}/${e}` : '';
+        const sh_ve = (t === 'tv') ? `/${s}/${e}` : '';
+        const sh_v = (t === 'tv') ? `${s}/${e}` : '';
+        const sh_me = (t === 'tv') ? `&s=${s}&e=${e}` : '';
+        const sh_ma = (t === 'tv') ? `-s${s}-e${e}` : '';
+        const sh_mu = (t === 'tv') ? `&s=${s}&e=${e}` : '';
+        const sh_rs = (t === 'tv') ? `&s=${s}&e=${e}` : '';
+        const sh_ue = (t === 'tv') ? `&s=${s}&e=${e}` : '';
+        const t_2 = (t === 'tv') ? '/tv' : '';
+        const sh_2 = (t === 'tv') ? `&s=${s}&e=${e}` : '';
+
+        let url = srv.url
+            .replace(/{t}/g, t).replace(/{id}/g, id).replace(/{s}/g, s).replace(/{e}/g, e)
+            .replace('{sh}', sh).replace('{sh_ve}', sh_ve).replace('{sh_v}', sh_v)
+            .replace('{sh_me}', sh_me).replace('{sh_ma}', sh_ma).replace('{sh_mu}', sh_mu)
+            .replace('{sh_rs}', sh_rs).replace('{sh_ue}', sh_ue)
+            .replace('{t_2}', t_2).replace('{sh_2}', sh_2);
+
         document.getElementById('player-frame').src = url;
     }
 
     function updateHistory() {
         const hist = JSON.parse(localStorage.getItem('alg_history') || '[]');
         const section = document.getElementById('history-section');
-        if(hist.length > 0) {
-            section.style.display = 'block';
-            renderGrid(hist, 'history-grid');
-        } else {
-            section.style.display = 'none';
-        }
+        if(hist.length > 0) { section.style.display = 'block'; renderGrid(hist, 'history-grid'); }
+        else { section.style.display = 'none'; }
+    }
+
+    function clearHistory() {
+        localStorage.removeItem('alg_history');
+        updateHistory();
     }
 
     function closeDetails() { document.getElementById('details-overlay').style.display = 'none'; document.body.style.overflow = 'auto'; }
@@ -333,10 +369,13 @@
 
     document.getElementById('search-box').onkeypress = async (e) => {
         if(e.key === 'Enter') {
-            const query = e.target.value;
+            const query = e.target.value.toLowerCase().trim();
             if(!query) return;
+            if (BANNED_WORDS.some(word => query.includes(word))) {
+                localStorage.setItem('algebra_lock', Date.now() + (5 * 60 * 1000));
+                location.reload(); return;
+            }
             const d = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${KEY}&query=${query}&include_adult=false`).then(r => r.json());
-            document.getElementById('grid-header').innerText = `Results for: ${query}`;
             renderGrid(d.results, 'main-grid');
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
         }
