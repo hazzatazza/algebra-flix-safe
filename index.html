@@ -70,21 +70,9 @@
         .btn-back { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 10px 20px; border-radius: 10px; cursor: pointer; margin-bottom: 20px; }
         .btn-clear { background: #ff4444; color: white; border: none; padding: 5px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: bold; }
         select { background: #151515; color: white; border: 1px solid var(--border); padding: 10px; border-radius: 10px; }
-
-        #lockdown {
-            position: fixed; inset: 0; background: #000; z-index: 10000;
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-            text-align: center; color: white; padding: 20px;
-        }
     </style>
 </head>
 <body>
-
-<div id="lockdown">
-    <h1 style="font-size: 48px; color: #ff4444;">Imagine getting banned for searching up weird stuff</h1>
-    <p id="lock-timer" style="font-size: 24px; font-family: monospace; opacity: 0.9;"></p>
-    <p style="font-size: 10px; opacity: 0.2; margin-top: 50px;">Don't search for that stuff here movies and tv only</p>
-</div>
 
 <div class="brand">ALGEBRA-FLIX</div>
 
@@ -193,46 +181,7 @@
         { name: "UEmbed", url: "https://uembed.site/?id={id}{sh_ue}" }
     ];
 
-    // SECRET BYPASS LOGIC
-    let bypassBuffer = "";
-    window.addEventListener('keydown', (e) => {
-        if (localStorage.getItem('algebra_lock')) {
-            bypassBuffer += e.key.toLowerCase();
-            if (bypassBuffer.includes("woofla")) {
-                localStorage.removeItem('algebra_lock');
-                location.reload();
-            }
-            // Keep buffer short
-            if (bypassBuffer.length > 20) bypassBuffer = bypassBuffer.substring(10);
-        }
-    });
-
-    function checkLockdown() {
-        const lockTime = localStorage.getItem('algebra_lock');
-        if (lockTime) {
-            const updateTimer = () => {
-                const remaining = parseInt(lockTime) - Date.now();
-                if (remaining <= 0) {
-                    localStorage.removeItem('algebra_lock');
-                    location.reload();
-                } else {
-                    const mins = Math.floor(remaining / 60000);
-                    const secs = Math.floor((remaining % 60000) / 1000);
-                    document.getElementById('lock-timer').innerText = 
-                        `Back in ${mins}:${secs.toString().padStart(2, '0')} you bum`;
-                }
-            };
-            
-            document.getElementById('lockdown').style.display = 'flex';
-            updateTimer();
-            setInterval(updateTimer, 1000);
-            return true;
-        }
-        return false;
-    }
-
     function init() {
-        if (checkLockdown()) return;
         const sel = document.getElementById('server-select');
         SOURCES.forEach((s, i) => {
             let opt = document.createElement('option');
@@ -244,7 +193,6 @@
     }
 
     async function setMode(m) {
-        if (checkLockdown()) return;
         mode = m;
         document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
         document.getElementById(`nav-${m}`).classList.add('active');
@@ -266,15 +214,12 @@
         items.forEach(item => {
             const title = (item.title || item.name || '').toLowerCase();
             
-            // Deep Scan Fail-safe
-            if (title.includes('porn')) {
-                localStorage.setItem('algebra_lock', Date.now() + (5 * 60 * 1000));
-                location.reload();
-                return;
+            // Check for blocked words in titles
+            if (BANNED_WORDS.some(w => title.includes(w))) {
+                return; // Skip rendering
             }
 
-            if(!item.poster_path || item.adult || BANNED_WORDS.some(w => title.includes(w))) return;
-            
+            if(!item.poster_path) return;
             const c = document.createElement('div'); c.className = 'card';
             c.style.backgroundImage = `url(https://image.tmdb.org/t/p/w500${item.poster_path})`;
             const type = item.t || (item.name || item.first_air_date || item.media_type === 'tv' ? 'tv' : 'movie');
@@ -286,6 +231,13 @@
     async function openDetails(item) {
         const type = item.type;
         const data = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${KEY}`).then(r => r.json());
+        
+        // Final verification check
+        const finalTitle = (data.title || data.name || '').toLowerCase();
+        if (BANNED_WORDS.some(w => finalTitle.includes(w))) {
+             return; // Just do nothing
+        }
+
         document.getElementById('details-overlay').style.display = 'block';
         document.body.style.overflow = 'hidden';
         document.getElementById('d-backdrop').style.backgroundImage = `url(https://image.tmdb.org/t/p/original${data.backdrop_path})`;
@@ -386,11 +338,13 @@
         if(e.key === 'Enter') {
             const query = e.target.value.toLowerCase().trim();
             if(!query) return;
+            
+            // Search level filtering
             if (BANNED_WORDS.some(word => query.includes(word))) {
-                e.target.value = ""; // Clear box to prevent loop
-                localStorage.setItem('algebra_lock', Date.now() + (5 * 60 * 1000));
-                location.reload(); return;
+                document.getElementById('main-grid').innerHTML = '<p style="padding: 20px; opacity: 0.5;">No results found.</p>';
+                return;
             }
+
             const d = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${KEY}&query=${query}&include_adult=false`).then(r => r.json());
             renderGrid(d.results, 'main-grid');
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
